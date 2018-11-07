@@ -26,6 +26,7 @@ training:
   gan_type: standard
   reg_type: real
   reg_param: 10.
+  reg_lap: 0
   batch_size: 24
   nworkers: 16
   take_model_average: true
@@ -50,8 +51,8 @@ test:
   sample_size: 6
   sample_nrow: 3
   use_model_average: true
-  compute_inception: false
-  conditional_samples: false
+  compute_inception: true
+  conditional_samples: true
 interpolations:
   nzs: 10
   nsubsteps: 75

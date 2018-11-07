@@ -4,11 +4,11 @@ from torch.nn import functional as F
 import torch.utils.data
 import torch.utils.data.distributed
 from torch import autograd
-
+from .lap import *
 
 class Trainer(object):
     def __init__(self, generator, discriminator, g_optimizer, d_optimizer,
-                 gan_type, reg_type, reg_param):
+                 gan_type, reg_type, reg_param, reg_lap):
         self.generator = generator
         self.discriminator = discriminator
         self.g_optimizer = g_optimizer
@@ -17,23 +17,29 @@ class Trainer(object):
         self.gan_type = gan_type
         self.reg_type = reg_type
         self.reg_param = reg_param
+        self.reg_lap = reg_lap
+        if self.reg_lap != 0:
+            self.lap = lap_pyramid(6, 128)
 
-    def generator_trainstep(self, y, z):
+    def generator_trainstep(self, y, z, x_real):
         assert(y.size(0) == z.size(0))
         toogle_grad(self.generator, True)
         toogle_grad(self.discriminator, False)
         self.generator.train()
         self.discriminator.train()
         self.g_optimizer.zero_grad()
-
         x_fake = self.generator(z, y)
         d_fake = self.discriminator(x_fake, y)
-        gloss = self.compute_loss(d_fake, 1)
+        if self.reg_lap != 0:
+            g_reg = self.lap.compare(x_real, x_fake)*self.reg_lap
+        else:
+            g_reg = torch.Tensor([0]).type(torch.cuda.FloatTensor)
+        gloss = self.compute_loss(d_fake, 1) + g_reg
         gloss.backward()
 
         self.g_optimizer.step()
 
-        return gloss.item()
+        return gloss.item(), g_reg.item()
 
     def discriminator_trainstep(self, x_real, y, z):
         toogle_grad(self.generator, False)
@@ -48,7 +54,7 @@ class Trainer(object):
         d_real = self.discriminator(x_real, y)
         dloss_real = self.compute_loss(d_real, 1)
 
-        if self.reg_type == 'real' or self.reg_type == 'real_fake':
+        if self.reg_type == 'real':
             dloss_real.backward(retain_graph=True)
             reg = self.reg_param * compute_grad2(d_real, x_real).mean()
             reg.backward()
@@ -63,7 +69,7 @@ class Trainer(object):
         d_fake = self.discriminator(x_fake, y)
         dloss_fake = self.compute_loss(d_fake, 0)
 
-        if self.reg_type == 'fake' or self.reg_type == 'real_fake':
+        if self.reg_type == 'fake':
             dloss_fake.backward(retain_graph=True)
             reg = self.reg_param * compute_grad2(d_fake, x_fake).mean()
             reg.backward()
@@ -72,9 +78,6 @@ class Trainer(object):
 
         if self.reg_type == 'wgangp':
             reg = self.reg_param * self.wgan_gp_reg(x_real, x_fake, y)
-            reg.backward()
-        elif self.reg_type == 'wgangp0':
-            reg = self.reg_param * self.wgan_gp_reg(x_real, x_fake, y, center=0.)
             reg.backward()
 
         self.d_optimizer.step()
@@ -101,7 +104,7 @@ class Trainer(object):
 
         return loss
 
-    def wgan_gp_reg(self, x_real, x_fake, y, center=1.):
+    def wgan_gp_reg(self, x_real, x_fake, y):
         batch_size = y.size(0)
         eps = torch.rand(batch_size, device=y.device).view(batch_size, 1, 1, 1)
         x_interp = (1 - eps) * x_real + eps * x_fake
@@ -109,7 +112,7 @@ class Trainer(object):
         x_interp.requires_grad_()
         d_out = self.discriminator(x_interp, y)
 
-        reg = (compute_grad2(d_out, x_interp).sqrt() - center).pow(2).mean()
+        reg = (compute_grad2(d_out, x_interp).sqrt() - 1.).pow(2).mean()
 
         return reg
 

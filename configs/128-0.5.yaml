@@ -22,12 +22,12 @@ z_dist:
   type: gauss
   dim: 256
 training:
-  out_dir: scratch/output/imagenet
+  out_dir: scratch/output/128-0.5
   gan_type: standard
   reg_type: real
   reg_param: 10.
-  reg_lap: 0
-  batch_size: 64
+  reg_lap: 0.1
+  batch_size: 60
   nworkers: 32
   take_model_average: true
   model_average_beta: 0.999
@@ -47,8 +47,8 @@ training:
   d_steps: 1
   equalize_lr: false
 test:
-  batch_size: 32
-  sample_size: 32
+  batch_size: 10
+  sample_size: 25
   sample_nrow: 8
   use_model_average: false
   compute_inception: true

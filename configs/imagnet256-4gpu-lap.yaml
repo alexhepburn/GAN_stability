@@ -4,7 +4,7 @@ data:
   test_dir: ./scratch/ILSVRC2012_img_train/ILSVRC2012_img_train
   lsun_categories_train: bedroom_train
   lsun_categories_test: bedroom_test
-  img_size: 128
+  img_size: 256
   nlabels: 1000
 generator:
   name: resnet2
@@ -22,12 +22,12 @@ z_dist:
   type: gauss
   dim: 256
 training:
-  out_dir: scratch/output/imagenet
+  out_dir: scratch/output/256-0.1
   gan_type: standard
   reg_type: real
   reg_param: 10.
-  reg_lap: 0
-  batch_size: 64
+  reg_lap: 0.1
+  batch_size: 30
   nworkers: 32
   take_model_average: true
   model_average_beta: 0.999
@@ -47,8 +47,8 @@ training:
   d_steps: 1
   equalize_lr: false
 test:
-  batch_size: 32
-  sample_size: 32
+  batch_size: 10
+  sample_size: 25
   sample_nrow: 8
   use_model_average: false
   compute_inception: true
