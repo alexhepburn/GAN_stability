@@ -26,7 +26,7 @@ parser.add_argument('--no-cuda', action='store_true', help='Do not use cuda.')
 args = parser.parse_args()
 
 config = load_config(args.config)
-is_cuda = (torch.cuda.is_available() and not args.no_cuda)
+is_cuda = (torch.cuda.is_available()) #and not args.no_cuda)
 
 # Short hands
 batch_size = config['training']['batch_size']
@@ -61,11 +61,12 @@ train_dataset, nlabels = get_dataset(
     size=config['data']['img_size'],
     lsun_categories=config['data']['lsun_categories_train']
 )
+print('loaded dataset')
 train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=batch_size,
-        num_workers=config['training']['nworkers'],
-        shuffle=True, pin_memory=True, sampler=None, drop_last=True
+        #num_workers=config['training']['nworkers'],
+        shuffle=True, pin_memory=False, sampler=None, drop_last=True
 )
 
 # Number of labels
@@ -151,7 +152,8 @@ trainer = Trainer(
     generator, discriminator, g_optimizer, d_optimizer,
     gan_type=config['training']['gan_type'],
     reg_type=config['training']['reg_type'],
-    reg_param=config['training']['reg_param']
+    reg_param=config['training']['reg_param'],
+    reg_lap = config['training']['reg_lap']
 )
 
 # Training loop
@@ -182,19 +184,20 @@ while True:
         # Generators updates
         if ((it + 1) % d_steps) == 0:
             z = zdist.sample((batch_size,))
-            gloss = trainer.generator_trainstep(y, z)
-            logger.add('losses', 'generator', gloss, it=it)
-
+            gloss = trainer.generator_trainstep(y, z, x_real)
+            logger.add('losses', 'generator', gloss[0], it=it)
+            logger.add('losses', 'generator_lap', gloss[1], it=it)
             if config['training']['take_model_average']:
                 update_average(generator_test, generator,
                                beta=config['training']['model_average_beta'])
 
         # Print stats
         g_loss_last = logger.get_last('losses', 'generator')
+        g_lap_last = logger.get_last('losses', 'generator_lap')
         d_loss_last = logger.get_last('losses', 'discriminator')
         d_reg_last = logger.get_last('losses', 'regularizer')
-        print('[epoch %0d, it %4d] g_loss = %.4f, d_loss = %.4f, reg=%.4f'
-              % (epoch_idx, it, g_loss_last, d_loss_last, d_reg_last))
+        print('[epoch %0d, it %4d] g_loss = %.4f, g_lap_loss=%.4f, d_loss = %.4f, reg=%.4f'
+              % (epoch_idx, it, g_loss_last, g_lap_last, d_loss_last, d_reg_last))
 
         # (i) Sample if necessary
         if (it % config['training']['sample_every']) == 0:
